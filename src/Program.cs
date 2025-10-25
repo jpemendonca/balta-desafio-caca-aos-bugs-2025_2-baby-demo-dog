@@ -1,6 +1,7 @@
 using BugStore.Data;
 using BugStore.Endpoints.Customer;
 using BugStore.Endpoints.Order;
+using BugStore.Endpoints.Product;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(x => x.UseSqlite(connectionString));
 
 builder.Services.AddScoped<BugStore.Handlers.Customers.ICustomerHandler, BugStore.Handlers.Customers.Handler>();
 builder.Services.AddScoped<BugStore.Handlers.Order.IOrderHandle, BugStore.Handlers.Order.Handler>();
+builder.Services.AddScoped<BugStore.Handlers.Product.IProductHandle, BugStore.Handlers.Product.Handler>();
 
 var app = builder.Build();
 
@@ -30,12 +32,6 @@ app.MapGet("/", () => "Hello World!");
 
 app.MapCustomerEndpoints();
 app.MapOrderEndpoints();
-
-app.MapGet("/v1/products", () => "Hello World!");
-app.MapGet("/v1/products/{id}", () => "Hello World!");
-app.MapPost("/v1/products", () => "Hello World!");
-app.MapPut("/v1/products/{id}", () => "Hello World!");
-app.MapDelete("/v1/products/{id}", () => "Hello World!");
-
+app.MapProductEndpoints();
 
 app.Run();

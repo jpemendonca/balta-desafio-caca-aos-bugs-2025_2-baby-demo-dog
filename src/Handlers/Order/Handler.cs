@@ -8,18 +8,11 @@ using Create = BugStore.Requests.Orders.Create;
 
 namespace BugStore.Handlers.Order;
 
-public class Handler : IOrderHandle
+public class Handler(AppDbContext context) : IOrderHandle
 {
-    private readonly AppDbContext _context;
-
-    public Handler(AppDbContext context)
-    {
-        _context = context;
-    }
-
     public async Task<IResult> GetAllAsync()
     {
-        var orders = await _context.Orders
+        var orders = await context.Orders
             .Include(o => o.Customer)
             .Include(o => o.Lines)
                 .ThenInclude(l => l.Product)
@@ -46,7 +39,7 @@ public class Handler : IOrderHandle
 
     public async Task<IResult> GetByIdAsync(Guid id)
     {
-        var order = await _context.Orders
+        var order = await context.Orders
             .Include(o => o.Customer)
             .Include(o => o.Lines)
                 .ThenInclude(l => l.Product)
@@ -76,13 +69,13 @@ public class Handler : IOrderHandle
 
     public async Task<IResult> CreateAsync(Create request)
     {
-        var customer = await _context.Customers.FindAsync(request.CustomerId);
+        var customer = await context.Customers.FindAsync(request.CustomerId);
         if (customer is null)
             return Results.BadRequest(new { Message = "Cliente não encontrado." });
 
         var productIds = request.Lines.Select(l => l.ProductId).Distinct();
         
-        var productsFromDb = await _context.Products
+        var productsFromDb = await context.Products
             .Where(p => productIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id);
 
@@ -115,20 +108,37 @@ public class Handler : IOrderHandle
             order.Lines.Add(orderLine);
         }
 
-        await _context.Orders.AddAsync(order); // Adicionar o pedido irá adicionar as linhas (em cascata)
-        await _context.SaveChangesAsync();
+        await context.Orders.AddAsync(order); // Adicionar o pedido irá adicionar as linhas (em cascata)
+        await context.SaveChangesAsync();
         
-        return Results.Created($"/v1/orders/{order.Id}", order);
+        var response = new Responses.Orders.GetById
+        {
+            Id = order.Id,
+            CustomerId = order.CustomerId,
+            CustomerName = customer.Name,
+            CreatedAt = order.CreatedAt,
+            TotalOrderValue = order.Lines.Sum(l => l.Total),
+            Lines = order.Lines.Select(l => new Responses.Orders.OrderLineResponse
+            {
+                ProductId = l.ProductId,
+                // 'productsFromDb' ainda está acessível no escopo
+                ProductName = productsFromDb[l.ProductId].Title, 
+                Quantity = l.Quantity,
+                Total = l.Total
+            }).ToList()
+        };
+        
+        return Results.Created($"/v1/orders/{order.Id}", response);
     }
 
     public async Task<IResult> DeleteAsync(Guid id)
     {
-        var order = await _context.Orders.FindAsync(id);
+        var order = await context.Orders.FindAsync(id);
         if (order is null)
             return Results.NotFound();
 
-        _context.Orders.Remove(order);
-        await _context.SaveChangesAsync();
+        context.Orders.Remove(order);
+        await context.SaveChangesAsync();
 
         return Results.NoContent();
     }
